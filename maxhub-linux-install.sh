@@ -70,11 +70,75 @@ else
     info "WineHQ apt source already present."
 fi
 
-# ── 2. Install Wine ─────────────────────────────────────────────────
-info "Installing Wine (winehq-devel) — this may take a while …"
-apt-get update -qq 2>&1 | grep -v "^W:" >&2 || true
-apt-get install -y --install-recommends winehq-devel >/dev/null 2>&1 || \
-    apt-get install -y --install-recommends winehq-devel
+# ── 2. Check existing Wine & install WineHQ ──────────────────────────
+
+# If winehq-devel is already installed at 11+, skip entirely
+EXISTING_VER=$(wine --version 2>/dev/null || true)
+EXISTING_MAJOR=$(echo "$EXISTING_VER" | grep -oP 'wine-\K[0-9]+' || echo "0")
+
+if [[ "$EXISTING_MAJOR" -ge 11 ]]; then
+    info "Wine $EXISTING_VER already installed — skipping."
+else
+    info "Installing Wine (winehq-devel) — this may take a while …"
+    apt-get update -qq 2>&1 | grep -v "^W:" >&2 || true
+
+    # Try to install — if it works, great. If not, diagnose and guide the user.
+    if apt-get install -y --install-recommends winehq-devel 2>&1 | grep -v "^W:"; then
+        info "Wine installed successfully."
+    else
+        # ── Diagnose the failure and tell the user what to do ────────
+        echo ""
+        error "Wine installation failed. Diagnosing the problem …"
+        echo ""
+
+        # Check for held packages
+        HELD=$(apt-mark showhold 2>/dev/null | grep -iE "wine|libwine" || true)
+        if [[ -n "$HELD" ]]; then
+            error "Found held packages that block installation:"
+            error "  $HELD"
+            echo ""
+            error "To fix, run:"
+            error "  sudo apt-mark unhold $HELD"
+            error "Then re-run this installer."
+            exit 1
+        fi
+
+        # Check for conflicting Wine packages from Ubuntu/other repos
+        CONFLICTS=$(dpkg -l 2>/dev/null | grep -E "^ii" | awk '{print $2}' | \
+            grep -iE "^(wine|wine32|wine64|wine-stable|wine[0-9])" | \
+            grep -iv "winehq\|wine-devel\|wine-staging" || true)
+        if [[ -n "$CONFLICTS" ]]; then
+            error "Found Wine packages from other sources that conflict with WineHQ:"
+            for pkg in $CONFLICTS; do
+                error "  - $pkg"
+            done
+            echo ""
+            error "To fix, you can remove them (this will NOT delete your Wine settings/data):"
+            error "  sudo apt remove $CONFLICTS"
+            error "Then re-run this installer."
+            echo ""
+            error "If you use these packages for other programs, you may need to"
+            error "choose between the existing Wine and WineHQ 11+."
+            exit 1
+        fi
+
+        # Check for broken dpkg state
+        if ! dpkg --configure -a 2>/dev/null; then
+            error "dpkg is in a broken state."
+            error "To fix, run:"
+            error "  sudo dpkg --configure -a"
+            error "  sudo apt --fix-broken install"
+            error "Then re-run this installer."
+            exit 1
+        fi
+
+        # Generic fallback
+        error "Could not determine the cause. Please run this command manually"
+        error "to see the full error:"
+        error "  sudo apt install --install-recommends winehq-devel"
+        exit 1
+    fi
+fi
 
 WINE_VER=$(wine --version 2>/dev/null || true)
 info "Wine installed: ${WINE_VER:-unknown version}"
