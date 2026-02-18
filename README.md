@@ -23,7 +23,7 @@ Wine רגיל (גרסה 9.0 ומטה) לא עובד — ה-UDEV bus שלו לא 
 הסקריפט הזה מריץ **Wine 11.2+** בתוך Docker — בלי לגעת בחבילות שלכם.
 
 ### דרישות
-- לינוקס 64 ביט (אובונטו, פדורה, דביאן, וכו')
+- לינוקס 64 ביט (אובונטו, דביאן, פדורה, Arch, openSUSE, CentOS ועוד)
 - חיבור לאינטרנט
 - דונגל MAXHUB מחובר ב-USB (או העתקה ידנית של MAXHUB.exe)
 
@@ -56,8 +56,8 @@ sudo bash maxhub-linux-install.sh
 
 | שלב | פעולה | נוגע בחבילות שלכם? |
 |:---:|-------|:-------------------:|
-| 1 | מתקין Docker (אם לא קיים) | לא |
-| 2 | בונה Docker image עם Wine 11+ | לא |
+| 1 | מתקין Docker (אם לא קיים, כל דיסטרו) | לא |
+| 2 | מוריד image מוכן עם Wine 11+ (~דקה) | לא |
 | 3 | יוצר udev rule להרשאות הדונגל | לא |
 | 4 | מעתיק MAXHUB.exe מכונן USB | לא |
 | 5 | יוצר קיצור דרך + סקריפט הפעלה | לא |
@@ -170,8 +170,8 @@ sudo bash maxhub-linux-install.sh
 
 | Step | Action | Touches your packages? |
 |:----:|--------|:----------------------:|
-| 1 | Installs Docker (if not present) | No |
-| 2 | Builds Docker image with Wine 11+ | No |
+| 1 | Installs Docker (if not present, any distro) | No |
+| 2 | Pulls pre-built Wine 11+ image (~1 min) | No |
 | 3 | Creates udev rule for dongle permissions | No |
 | 4 | Copies MAXHUB.exe from USB drive | No |
 | 5 | Creates desktop launcher + shell script | No |
@@ -226,7 +226,7 @@ docker rmi maxhub-dongle
 | **Protocol** | USB HID with TCP/IP tunnel (`dongle_lwip_hid.dll`) |
 | **Wine** | 11.2+ in Docker (Ubuntu 24.04 base) |
 | **Isolation** | Full — Wine never installed on host |
-| **Tested on** | Ubuntu 22.04, Ubuntu 24.04 |
+| **Tested on** | Ubuntu 22.04, Ubuntu 24.04, Fedora, Debian |
 
 ## License
 
