@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# MAXHUB Wireless Dongle — Linux Installer v4.0.9 (Wine Portable)
+# MAXHUB Wireless Dongle — Linux Installer v4.1.0 (Wine Portable)
 #
 # Downloads a portable Wine 11.2 build (~70MB) — no Docker, no system packages.
 # Only touches: one udev rule, Wine in /opt, and launcher files.
@@ -138,7 +138,7 @@ echo ""
 echo -e "${BOLD}${CYAN}"
 echo "  ╔═══════════════════════════════════════════╗"
 echo "  ║   MAXHUB Wireless Dongle — Installer      ║"
-echo "  ║   Wine Portable  v4.0.9                    ║"
+echo "  ║   Wine Portable  v4.1.0                    ║"
 echo "  ╚═══════════════════════════════════════════╝"
 echo -e "${NC}"
 echo -e "  ${DIM}Portable Wine — no Docker, no system packages modified.${NC}"
@@ -154,10 +154,27 @@ REAL_USER="${SUDO_USER:-$USER}"
 detect_distro
 info "Detected package manager: ${PKG_MANAGER}"
 
+# Check available disk space (need ~200MB for Wine + prefix)
+AVAIL_MB=$(df -m "$INSTALL_DIR" 2>/dev/null | awk 'NR==2{print $4}' || echo 0)
+# If install dir doesn't exist yet, check /opt
+[[ "$AVAIL_MB" -eq 0 ]] && AVAIL_MB=$(df -m /opt 2>/dev/null | awk 'NR==2{print $4}' || echo 0)
+if [[ "$AVAIL_MB" -lt 200 ]]; then
+    die "Not enough disk space. Need ~200MB, have ${AVAIL_MB}MB free on $(df -h "$INSTALL_DIR" 2>/dev/null | awk 'NR==2{print $6}' || echo '/opt')"
+fi
+info "Disk space: ${AVAIL_MB}MB available"
+
 # ── Step 1: Download Wine portable ──────────────────────────────
 step "Downloading Wine ${WINE_VERSION}" "~10 sec"
 
 mkdir -p "$INSTALL_DIR"
+
+# Clean up junk from previous broken installs (e.g. git repos cloned inside /opt)
+for junk in "$INSTALL_DIR"/{MAXHUB-LINUX,.git}; do
+    if [[ -d "$junk" ]]; then
+        warn "Removing junk directory: $junk"
+        rm -rf "$junk"
+    fi
+done
 
 if [[ -x "$WINE_DIR/bin/wine" ]]; then
     EXISTING_VER=$("$WINE_DIR/bin/wine" --version 2>/dev/null || echo "unknown")
