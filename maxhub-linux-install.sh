@@ -244,13 +244,22 @@ fi
 
 if [[ -n "$EXE_FOUND" ]]; then
     cp "$EXE_FOUND" "$INSTALL_DIR/$EXE_NAME"
-    # Copy DLLs alongside the exe
+    # Copy DLLs from same directory and from USB root
     EXE_DIR=$(dirname "$EXE_FOUND")
     shopt -s nullglob
     for dll in "$EXE_DIR"/*.dll "$EXE_DIR"/*.DLL; do
         cp "$dll" "$INSTALL_DIR/"
         info "Copied: $(basename "$dll")"
     done
+    # Also search one level up and in common subdirectories
+    USB_ROOT=$(findmnt -n -o TARGET --target "$EXE_FOUND" 2>/dev/null || dirname "$EXE_DIR")
+    if [[ -d "$USB_ROOT" && "$USB_ROOT" != "$EXE_DIR" ]]; then
+        for dll in "$USB_ROOT"/*.dll "$USB_ROOT"/*.DLL; do
+            [[ -f "$INSTALL_DIR/$(basename "$dll")" ]] && continue
+            cp "$dll" "$INSTALL_DIR/"
+            info "Copied: $(basename "$dll") (from USB root)"
+        done
+    fi
     shopt -u nullglob
     info "MAXHUB.exe copied to $INSTALL_DIR/"
 elif [[ -f "$INSTALL_DIR/$EXE_NAME" ]]; then
@@ -376,8 +385,13 @@ echo -e "  ${DIM}If the dongle is plugged in, unplug and replug it.${NC}"
 echo ""
 
 # ── Auto-launch ──────────────────────────────────────────────────
-if [[ -f "$INSTALL_DIR/$EXE_NAME" ]]; then
+if [[ -f "$INSTALL_DIR/$EXE_NAME" ]] && [[ -n "${DISPLAY:-}" ]]; then
     echo -e "  ${BOLD}Launching MAXHUB …${NC}"
     echo ""
-    sudo -u "$REAL_USER" bash -c "DISPLAY=${DISPLAY:-:0} exec $LAUNCHER" &
+    REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+    nohup sudo -u "$REAL_USER" env \
+        DISPLAY="$DISPLAY" \
+        XAUTHORITY="${XAUTHORITY:-$REAL_HOME/.Xauthority}" \
+        "$LAUNCHER" >/dev/null 2>&1 &
+    disown
 fi
