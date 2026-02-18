@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# MAXHUB Wireless Dongle — Linux Installer v4.1.0 (Wine Portable)
+# MAXHUB Wireless Dongle — Linux Installer v4.1.1 (Wine Portable)
 #
 # Downloads a portable Wine 11.2 build (~70MB) — no Docker, no system packages.
 # Only touches: one udev rule, Wine in /opt, and launcher files.
@@ -138,7 +138,7 @@ echo ""
 echo -e "${BOLD}${CYAN}"
 echo "  ╔═══════════════════════════════════════════╗"
 echo "  ║   MAXHUB Wireless Dongle — Installer      ║"
-echo "  ║   Wine Portable  v4.1.0                    ║"
+echo "  ║   Wine Portable  v4.1.1                    ║"
 echo "  ╚═══════════════════════════════════════════╝"
 echo -e "${NC}"
 echo -e "  ${DIM}Portable Wine — no Docker, no system packages modified.${NC}"
@@ -310,9 +310,6 @@ EXE="$INSTALL_DIR/MAXHUB.exe"
 export WINEPREFIX="$INSTALL_DIR/.wineprefix"
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export WINEDEBUG=-all
-# Software rendering avoids NVIDIA/wow64 OpenGL crashes (GL 4.6→4.3 cap)
-# Screen sharing tool doesn't need GPU acceleration
-export LIBGL_ALWAYS_SOFTWARE=1
 
 # ── Logging ────────────────────────────────────────────────────
 LOG_DIR="$INSTALL_DIR/logs"
@@ -328,6 +325,7 @@ log "=== MAXHUB Dongle Launcher ==="
 log "Wine: $("$WINE" --version 2>/dev/null || echo 'not found')"
 log "WINEPREFIX: $WINEPREFIX"
 log "DISPLAY: ${DISPLAY:-unset}"
+log "GPU: $(lspci 2>/dev/null | grep -i 'vga\|3d\|display' | head -2 || echo 'unknown')"
 
 if [[ ! -f "$EXE" ]]; then
     log "ERROR: $EXE not found."
@@ -348,17 +346,36 @@ if [[ -z "${DISPLAY:-}" ]]; then
     exit 1
 fi
 
-# First launch: create prefix directory (Wine auto-initializes on exec)
+# First launch: create prefix + pre-create directories the app expects
 if [[ ! -d "$WINEPREFIX/drive_c" ]]; then
     log "First launch — setting up Wine (~10 seconds) …"
     mkdir -p "$WINEPREFIX"
+    # Initialize Wine prefix (creates drive_c, system32, etc.)
+    "$WINE" wineboot --init 2>&1 | grep -v '^libEGL warning' | tee -a "$LOG_FILE"
+fi
+
+# Ensure ScreenShare bundle dir exists with schannel.dll (needed for TLS)
+WIN_USER="$WINEPREFIX/drive_c/users/$(whoami)"
+BUNDLE_DIR="$WIN_USER/Application Data/ScreenShare/bundle"
+if [[ ! -f "$BUNDLE_DIR/schannel.dll" ]]; then
+    log "Setting up ScreenShare bundle (schannel.dll for TLS) …"
+    mkdir -p "$BUNDLE_DIR"
+    # Copy Wine's schannel.dll to where the app expects it
+    for src in "$WINEPREFIX/drive_c/windows/system32/schannel.dll" \
+               "$WINEPREFIX/drive_c/windows/syswow64/schannel.dll"; do
+        if [[ -f "$src" ]]; then
+            cp "$src" "$BUNDLE_DIR/schannel.dll"
+            log "Copied schannel.dll from $(basename "$(dirname "$src")")"
+            break
+        fi
+    done
 fi
 
 log "Starting: $WINE $EXE $*"
 log "Log file: $LOG_FILE"
 
 cd "$INSTALL_DIR"
-"$WINE" "$EXE" "$@" 2>&1 | tee -a "$LOG_FILE"
+"$WINE" "$EXE" "$@" 2>&1 | grep -v '^libEGL warning' | tee -a "$LOG_FILE"
 EXIT_CODE=${PIPESTATUS[0]}
 log "Wine exited with code: $EXIT_CODE"
 exit "$EXIT_CODE"
