@@ -276,6 +276,7 @@ EXE="$INSTALL_DIR/MAXHUB.exe"
 
 export WINEPREFIX="$INSTALL_DIR/.wineprefix"
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
+export WINEDEBUG=-all
 
 if [[ ! -f "$EXE" ]]; then
     echo "Error: $EXE not found."
@@ -373,3 +374,10 @@ fi
 echo ""
 echo -e "  ${DIM}If the dongle is plugged in, unplug and replug it.${NC}"
 echo ""
+
+# ── Auto-launch ──────────────────────────────────────────────────
+if [[ -f "$INSTALL_DIR/$EXE_NAME" ]]; then
+    echo -e "  ${BOLD}Launching MAXHUB …${NC}"
+    echo ""
+    sudo -u "$REAL_USER" bash -c "DISPLAY=${DISPLAY:-:0} exec $LAUNCHER" &
+fi
