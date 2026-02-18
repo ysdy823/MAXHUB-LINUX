@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# MAXHUB Wireless Dongle — Linux Installer v4.0 (Wine Portable)
+# MAXHUB Wireless Dongle — Linux Installer v4.0.8 (Wine Portable)
 #
 # Downloads a portable Wine 11.2 build (~70MB) — no Docker, no system packages.
 # Only touches: one udev rule, Wine in /opt, and launcher files.
@@ -138,7 +138,7 @@ echo ""
 echo -e "${BOLD}${CYAN}"
 echo "  ╔═══════════════════════════════════════════╗"
 echo "  ║   MAXHUB Wireless Dongle — Installer      ║"
-echo "  ║   Wine Portable  v4.0                      ║"
+echo "  ║   Wine Portable  v4.0.8                    ║"
 echo "  ╚═══════════════════════════════════════════╝"
 echo -e "${NC}"
 echo -e "  ${DIM}Portable Wine — no Docker, no system packages modified.${NC}"
@@ -188,14 +188,13 @@ else
         die "Wine binary not found after extraction. Something went wrong."
     fi
 
-    # Disable crash dialog — remove winedbg so it can never spawn
-    # (RemoteLoader.exe crashes are harmless but winedbg opens console windows)
-    find "$WINE_DIR" -name "winedbg*" -delete 2>/dev/null || true
-    info "Crash dialogs disabled"
-
     WINE_VER=$("$WINE_DIR/bin/wine" --version 2>/dev/null || echo "unknown")
     info "Wine installed: $WINE_VER"
 fi
+
+# Disable crash dialog — remove winedbg so it can never spawn
+# (RemoteLoader.exe crashes are harmless but winedbg opens console windows)
+find "$WINE_DIR" -name "winedbg*" -delete 2>/dev/null || true
 
 step_done
 
@@ -289,33 +288,54 @@ export WINEDEBUG=-all
 # Screen sharing tool doesn't need GPU acceleration
 export LIBGL_ALWAYS_SOFTWARE=1
 
+# ── Logging ────────────────────────────────────────────────────
+LOG_DIR="$INSTALL_DIR/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/maxhub.log"
+
+# Rotate: keep one previous log
+[[ -f "$LOG_FILE" ]] && mv -f "$LOG_FILE" "${LOG_FILE}.old"
+
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
+
+log "=== MAXHUB Dongle Launcher ==="
+log "Wine: $("$WINE" --version 2>/dev/null || echo 'not found')"
+log "WINEPREFIX: $WINEPREFIX"
+log "DISPLAY: ${DISPLAY:-unset}"
+
 if [[ ! -f "$EXE" ]]; then
-    echo "Error: $EXE not found."
-    echo "Copy MAXHUB.exe to $INSTALL_DIR/ first."
+    log "ERROR: $EXE not found."
+    log "Copy MAXHUB.exe to $INSTALL_DIR/ first."
     exit 1
 fi
 
 if [[ ! -x "$WINE" ]]; then
-    echo "Error: Wine not found at $WINE"
-    echo "Re-run the installer: sudo bash maxhub-linux-install.sh"
+    log "ERROR: Wine not found at $WINE"
+    log "Re-run the installer: sudo bash maxhub-linux-install.sh"
     exit 1
 fi
 
 if [[ -z "${DISPLAY:-}" ]]; then
-    echo "Error: No display found (\$DISPLAY is empty)."
-    echo "This tool requires X11. Wayland without XWayland is not supported."
-    echo "If you use Wayland, make sure XWayland is enabled."
+    log "ERROR: No display found (\$DISPLAY is empty)."
+    log "This tool requires X11. Wayland without XWayland is not supported."
+    log "If you use Wayland, make sure XWayland is enabled."
     exit 1
 fi
 
 # First launch: create prefix directory (Wine auto-initializes on exec)
 if [[ ! -d "$WINEPREFIX/drive_c" ]]; then
-    echo "First launch — setting up Wine (~10 seconds) …"
+    log "First launch — setting up Wine (~10 seconds) …"
     mkdir -p "$WINEPREFIX"
 fi
 
+log "Starting: $WINE $EXE $*"
+log "Log file: $LOG_FILE"
+
 cd "$INSTALL_DIR"
-exec "$WINE" "$EXE" "$@"
+"$WINE" "$EXE" "$@" 2>&1 | tee -a "$LOG_FILE"
+EXIT_CODE=${PIPESTATUS[0]}
+log "Wine exited with code: $EXIT_CODE"
+exit "$EXIT_CODE"
 LAUNCHER_SCRIPT
 chmod +x "$LAUNCHER"
 info "Launcher: $LAUNCHER"
@@ -369,7 +389,8 @@ echo -e "  ${BOLD}Installed:${NC}"
 echo -e "  ${DIM}├─${NC} Wine          : ${CYAN}${WINE_VER}${NC} (portable, in $WINE_DIR)"
 echo -e "  ${DIM}├─${NC} Udev rule     : ${CYAN}$UDEV_RULE${NC}"
 echo -e "  ${DIM}├─${NC} Launcher      : ${CYAN}$LAUNCHER${NC}"
-echo -e "  ${DIM}└─${NC} Desktop entry : ${CYAN}MAXHUB Dongle${NC}"
+echo -e "  ${DIM}├─${NC} Desktop entry : ${CYAN}MAXHUB Dongle${NC}"
+echo -e "  ${DIM}└─${NC} Logs          : ${CYAN}$INSTALL_DIR/logs/maxhub.log${NC}"
 echo ""
 echo -e "  ${BOLD}${GREEN}Your system packages were NOT modified.${NC}"
 echo -e "  ${DIM}Wine is self-contained in $WINE_DIR — no system packages installed.${NC}"
