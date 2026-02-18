@@ -405,6 +405,14 @@ step_done
 # ── Step 5: Finalize ─────────────────────────────────────────────
 step "Finishing up" "~1 sec"
 
+# Remove old Wine prefix so launcher rebuilds it with schannel.dll fix
+WINEPREFIX_DIR="$INSTALL_DIR/.wineprefix"
+if [[ -d "$WINEPREFIX_DIR/drive_c" ]]; then
+    warn "Removing old Wine prefix (will rebuild on first launch) …"
+    rm -rf "$WINEPREFIX_DIR"
+    info "Old prefix removed — fresh setup on next launch"
+fi
+
 chown -R "$REAL_USER":"$REAL_USER" "$INSTALL_DIR"
 info "Ownership set to $REAL_USER"
 
