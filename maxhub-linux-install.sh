@@ -124,10 +124,11 @@ else
     info "Docker installed: $(docker --version | head -1)"
 fi
 
-# Start Docker if not running
+# Start Docker if not running, and enable on boot
 if ! docker info &>/dev/null 2>&1; then
     systemctl start docker 2>/dev/null || service docker start 2>/dev/null || true
 fi
+systemctl enable docker 2>/dev/null || true
 
 # Add user to docker group
 if ! groups "$REAL_USER" | grep -q docker; then
@@ -272,6 +273,10 @@ if ! command -v docker &>/dev/null; then
 fi
 
 if ! docker info &>/dev/null 2>&1; then
+    # Docker group may not be active yet (need logout/login) — try sg workaround
+    if sg docker -c "docker info" &>/dev/null 2>&1; then
+        exec sg docker -c "$0"
+    fi
     echo "Error: Docker is not running. Start it with: sudo systemctl start docker"
     exit 1
 fi
@@ -308,6 +313,7 @@ exec docker run --rm \
     -e DISPLAY="$DISPLAY" \
     -v /tmp/.X11-unix:/tmp/.X11-unix \
     -v "$INSTALL_DIR:/app:ro" \
+    --security-opt label=disable \
     $HIDRAW_ARGS \
     $USB_ARGS \
     --network=host \
