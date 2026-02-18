@@ -304,9 +304,13 @@ if [[ -z "${DISPLAY:-}" ]]; then
 fi
 
 # First launch: create prefix directory and let Wine initialize it (~10s)
-if [[ ! -d "$WINEPREFIX" ]]; then
+if [[ ! -d "$WINEPREFIX/drive_c" ]]; then
     echo "First launch — setting up Wine (~10 seconds) …"
     mkdir -p "$WINEPREFIX"
+    # Initialize prefix and disable crash dialog (RemoteLoader.exe crashes are harmless)
+    "$WINE" wineboot --init 2>/dev/null || true
+    "$WINE" reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug' \
+        /v Debugger /t REG_SZ /d "" /f 2>/dev/null || true
 fi
 
 cd "$INSTALL_DIR"
