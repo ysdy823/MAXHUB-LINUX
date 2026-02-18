@@ -39,6 +39,8 @@ sudo bash maxhub-linux-install.sh
 
 <div dir="rtl">
 
+זמן התקנה משוער: **~2-4 דקות** (מהיר יותר אם Docker כבר מותקן)
+
 ### איך זה עובד?
 
 ```
@@ -54,13 +56,13 @@ sudo bash maxhub-linux-install.sh
 
 ### מה הסקריפט עושה?
 
-| שלב | פעולה | נוגע בחבילות שלכם? |
-|:---:|-------|:-------------------:|
-| 1 | מתקין Docker (אם לא קיים, כל דיסטרו) | לא |
-| 2 | מוריד image מוכן עם Wine 11+ (~דקה) | לא |
-| 3 | יוצר udev rule להרשאות הדונגל | לא |
-| 4 | מעתיק MAXHUB.exe מכונן USB | לא |
-| 5 | יוצר קיצור דרך + סקריפט הפעלה | לא |
+| שלב | פעולה | זמן צפוי | נוגע בחבילות שלכם? |
+|:---:|-------|:---------:|:-------------------:|
+| 1 | מתקין Docker (אם לא קיים) | ~1 דק' | לא |
+| 2 | מוריד image מוכן עם Wine 11+ | ~1-2 דק' | לא |
+| 3 | יוצר udev rule להרשאות הדונגל | ~1 שנ' | לא |
+| 4 | מעתיק MAXHUB.exe מכונן USB | ~1 שנ' | לא |
+| 5 | יוצר קיצור דרך + סקריפט הפעלה | ~1 שנ' | לא |
 
 **אף חבילה במערכת שלכם לא תשתנה, תימחק, או תתנגש.**
 
@@ -100,6 +102,14 @@ sudo bash maxhub-linux-install.sh
 <summary><b>שגיאת Docker permissions</b></summary>
 
 אם מקבלים שגיאה על הרשאות Docker, התנתקו והתחברו מחדש (או הריצו `newgrp docker`).
+הלאנצ'ר ינסה לפתור את זה אוטומטית, אבל logout/login הוא הפתרון הנקי.
+
+</details>
+
+<details>
+<summary><b>Wayland — מסך שחור או שגיאת display</b></summary>
+
+הכלי דורש X11. אם אתם על Wayland, ודאו ש-XWayland מופעל (ברוב הדיסטרואים הוא מופעל כברירת מחדל).
 
 </details>
 
@@ -154,7 +164,7 @@ Wine runs inside a Docker container — **your system packages are never touched
 ```
 
 ### Requirements
-- Linux amd64 (Ubuntu, Fedora, Debian, Arch, etc.)
+- Linux amd64 (Ubuntu, Fedora, Debian, Arch, openSUSE, CentOS, and more)
 - Internet connection
 - MAXHUB dongle USB drive (or manual copy of MAXHUB.exe)
 
@@ -166,15 +176,17 @@ cd MAXHUB-LINUX
 sudo bash maxhub-linux-install.sh
 ```
 
+Estimated time: **~2-4 minutes** (faster if Docker is already installed)
+
 ### What the script does
 
-| Step | Action | Touches your packages? |
-|:----:|--------|:----------------------:|
-| 1 | Installs Docker (if not present, any distro) | No |
-| 2 | Pulls pre-built Wine 11+ image (~1 min) | No |
-| 3 | Creates udev rule for dongle permissions | No |
-| 4 | Copies MAXHUB.exe from USB drive | No |
-| 5 | Creates desktop launcher + shell script | No |
+| Step | Action | Est. time | Touches your packages? |
+|:----:|--------|:---------:|:----------------------:|
+| 1 | Installs Docker (if not present) | ~1 min | No |
+| 2 | Pulls pre-built Wine 11+ image | ~1-2 min | No |
+| 3 | Creates udev rule for dongle permissions | ~1 sec | No |
+| 4 | Copies MAXHUB.exe from USB drive | ~1 sec | No |
+| 5 | Creates desktop launcher + shell script | ~1 sec | No |
 
 **No system packages are modified, removed, or conflicted with.**
 
@@ -201,6 +213,14 @@ Or search for "MAXHUB Dongle" in your application menu.
 <summary><b>Docker permission denied</b></summary>
 
 Log out and log back in (or run `newgrp docker`).
+The launcher will try to work around this automatically, but logout/login is the clean fix.
+
+</details>
+
+<details>
+<summary><b>Wayland — black screen or display error</b></summary>
+
+This tool requires X11. If you're on Wayland, make sure XWayland is enabled (it is by default on most distros).
 
 </details>
 
@@ -226,7 +246,7 @@ docker rmi maxhub-dongle
 | **Protocol** | USB HID with TCP/IP tunnel (`dongle_lwip_hid.dll`) |
 | **Wine** | 11.2+ in Docker (Debian bookworm base) |
 | **Isolation** | Full — Wine never installed on host |
-| **Tested on** | Ubuntu 22.04, Ubuntu 24.04, Fedora, Debian |
+| **Supported** | Ubuntu, Debian, Fedora, CentOS/RHEL, Arch, Manjaro, openSUSE, and more |
 
 ## License
 

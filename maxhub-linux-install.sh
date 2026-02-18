@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# MAXHUB Wireless Dongle — Linux Installer (Docker edition)
+# MAXHUB Wireless Dongle — Linux Installer v3.0 (Docker edition)
 #
 # Runs Wine 11.x+ inside a Docker container — zero conflicts with your system.
 # Only touches: Docker (if not installed), one udev rule, and launcher files.
@@ -9,52 +9,71 @@
 #
 set -euo pipefail
 
-# ── Colours / UI helpers ─────────────────────────────────────────────
+# ── Cleanup trap ──────────────────────────────────────────────────
+cleanup() { tput cnorm 2>/dev/null || true; }
+trap cleanup EXIT
+
+# ── Colours / UI helpers ─────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'
 NC='\033[0m'
-
-TOTAL_STEPS=6
-current_step=0
-
-step() {
-    current_step=$((current_step + 1))
-    echo ""
-    echo -e "${BOLD}${BLUE}[$current_step/$TOTAL_STEPS]${NC} ${BOLD}$*${NC}"
-    echo -e "${DIM}$(printf '%.0s─' {1..50})${NC}"
-}
 
 info()  { echo -e "  ${GREEN}✓${NC} $*"; }
 warn()  { echo -e "  ${YELLOW}⚠${NC} $*"; }
 error() { echo -e "  ${RED}✗${NC} $*"; }
 die()   { error "$*"; exit 1; }
 
+# ── Timing ────────────────────────────────────────────────────────
+SCRIPT_START_TIME=$(date +%s)
+TOTAL_STEPS=6
+current_step=0
+step_start=0
+
+step() {
+    local label="$1" estimate="${2:-}"
+    current_step=$((current_step + 1))
+    step_start=$(date +%s)
+    echo ""
+    local est=""
+    [[ -n "$estimate" ]] && est="  ${DIM}($estimate)${NC}"
+    echo -e "${BOLD}${BLUE}[$current_step/$TOTAL_STEPS]${NC} ${BOLD}$label${NC}$est"
+    echo -e "${DIM}$(printf '%.0s─' {1..50})${NC}"
+}
+
+step_done() {
+    local elapsed=$(( $(date +%s) - step_start ))
+    if [[ $elapsed -ge 60 ]]; then
+        info "Done ($((elapsed/60))m $((elapsed%60))s)"
+    else
+        info "Done (${elapsed}s)"
+    fi
+}
+
 spinner() {
     local pid=$1 msg=$2
     local frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
-    local i=0
+    local i=0 spin_start
+    spin_start=$(date +%s)
 
-    # Hide cursor
     tput civis 2>/dev/null || true
 
     while kill -0 "$pid" 2>/dev/null; do
-        echo -ne "\r  ${CYAN}${frames[$i]}${NC} ${DIM}$msg${NC} "
+        local elapsed=$(( $(date +%s) - spin_start ))
+        echo -ne "\r  ${CYAN}${frames[$i]}${NC} ${DIM}$msg${NC} ${DIM}[${elapsed}s]${NC} "
         i=$(( (i + 1) % ${#frames[@]} ))
         sleep 0.1
     done
 
-    # Wait for exit code
     wait "$pid"
     local exit_code=$?
 
-    # Clear spinner line and show cursor
     echo -ne "\r\033[K"
     tput cnorm 2>/dev/null || true
 
     return $exit_code
 }
 
-# ── Constants ────────────────────────────────────────────────────────
+# ── Constants ────────────────────────────────────────────────────
 IMAGE_NAME="maxhub-dongle"
 GHCR_IMAGE="ghcr.io/ysdy823/maxhub-dongle:latest"
 INSTALL_DIR="/opt/maxhub-dongle"
@@ -64,82 +83,167 @@ LAUNCHER="$INSTALL_DIR/maxhub-dongle.sh"
 EXE_NAME="MAXHUB.exe"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# ── Banner ───────────────────────────────────────────────────────────
+# ── Distro detection ─────────────────────────────────────────────
+DISTRO_FAMILY="unknown"
+PKG_MANAGER="unknown"
+
+detect_distro() {
+    if [[ -f /etc/os-release ]]; then
+        # shellcheck source=/dev/null
+        . /etc/os-release
+        case "${ID:-}" in
+            ubuntu|debian|linuxmint|pop|elementary|zorin|kali|raspbian)
+                DISTRO_FAMILY="debian"; PKG_MANAGER="apt-get" ;;
+            fedora)
+                DISTRO_FAMILY="fedora"; PKG_MANAGER="dnf" ;;
+            centos|rhel|rocky|alma|ol)
+                DISTRO_FAMILY="fedora"
+                command -v dnf &>/dev/null && PKG_MANAGER="dnf" || PKG_MANAGER="yum" ;;
+            arch|manjaro|endeavouros|garuda)
+                DISTRO_FAMILY="arch"; PKG_MANAGER="pacman" ;;
+            opensuse*|sles)
+                DISTRO_FAMILY="suse"; PKG_MANAGER="zypper" ;;
+        esac
+    fi
+
+    # Fallback: detect by package manager
+    if [[ "$DISTRO_FAMILY" == "unknown" ]]; then
+        if command -v apt-get &>/dev/null; then
+            DISTRO_FAMILY="debian"; PKG_MANAGER="apt-get"
+        elif command -v dnf &>/dev/null; then
+            DISTRO_FAMILY="fedora"; PKG_MANAGER="dnf"
+        elif command -v yum &>/dev/null; then
+            DISTRO_FAMILY="fedora"; PKG_MANAGER="yum"
+        elif command -v pacman &>/dev/null; then
+            DISTRO_FAMILY="arch"; PKG_MANAGER="pacman"
+        elif command -v zypper &>/dev/null; then
+            DISTRO_FAMILY="suse"; PKG_MANAGER="zypper"
+        fi
+    fi
+}
+
+# ── Docker installation (distro-native first, get.docker.com fallback) ──
+ensure_curl() {
+    command -v curl &>/dev/null && return 0
+    case "$PKG_MANAGER" in
+        apt-get) apt-get update -qq >/dev/null 2>&1; apt-get install -y -qq curl >/dev/null 2>&1 ;;
+        dnf|yum) $PKG_MANAGER install -y -q curl >/dev/null 2>&1 ;;
+        pacman)  pacman -Sy --noconfirm curl >/dev/null 2>&1 ;;
+        zypper)  zypper --non-interactive install curl >/dev/null 2>&1 ;;
+        *)       die "curl not found and cannot install it automatically" ;;
+    esac
+}
+
+install_docker() {
+    local log="/tmp/maxhub-docker-install.log"
+    local installed=false
+
+    # Try distro-native package first (faster — no repo addition needed)
+    case "$DISTRO_FAMILY" in
+        debian)
+            echo -e "  ${DIM}Installing docker.io via apt …${NC}"
+            (apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq docker.io >"$log" 2>&1) &
+            spinner $! "Installing Docker (apt) …" && installed=true || true
+            ;;
+        fedora)
+            echo -e "  ${DIM}Installing docker via $PKG_MANAGER …${NC}"
+            ($PKG_MANAGER install -y docker >"$log" 2>&1) &
+            spinner $! "Installing Docker ($PKG_MANAGER) …" && installed=true || true
+            ;;
+        arch)
+            echo -e "  ${DIM}Installing docker via pacman …${NC}"
+            (pacman -Sy --noconfirm docker >"$log" 2>&1) &
+            spinner $! "Installing Docker (pacman) …" && installed=true || true
+            ;;
+        suse)
+            echo -e "  ${DIM}Installing docker via zypper …${NC}"
+            (zypper --non-interactive install docker >"$log" 2>&1) &
+            spinner $! "Installing Docker (zypper) …" && installed=true || true
+            ;;
+    esac
+
+    # Check if native install succeeded
+    if [[ "$installed" == true ]] && command -v docker &>/dev/null; then
+        return 0
+    fi
+
+    # Fallback: get.docker.com (supports nearly everything)
+    if ! command -v docker &>/dev/null; then
+        warn "Distro package unavailable — using get.docker.com"
+        ensure_curl
+        (curl -fsSL https://get.docker.com | sh -s -- >"$log" 2>&1) &
+        spinner $! "Installing Docker (get.docker.com) …" || true
+    fi
+
+    if ! command -v docker &>/dev/null; then
+        error "Install log: $log"
+        die "Docker installation failed. Install manually: https://docs.docker.com/engine/install/"
+    fi
+}
+
+# ── Banner ───────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}${CYAN}"
 echo "  ╔═══════════════════════════════════════════╗"
 echo "  ║   MAXHUB Wireless Dongle — Installer      ║"
-echo "  ║   Docker Edition                           ║"
+echo "  ║   Docker Edition  v3.0                     ║"
 echo "  ╚═══════════════════════════════════════════╝"
 echo -e "${NC}"
 echo -e "  ${DIM}Wine runs in Docker — your system stays clean.${NC}"
+echo -e "  ${DIM}Estimated time: ~2-4 min (faster if Docker is installed)${NC}"
 echo ""
 
-# ── Pre-flight checks ───────────────────────────────────────────────
+# ── Pre-flight checks ───────────────────────────────────────────
 [[ $EUID -eq 0 ]] || die "This script must be run as root.  Try:  sudo bash $0"
 
 REAL_USER="${SUDO_USER:-$USER}"
+DOCKER_GROUP_ADDED=false
 
-# ── Step 1: Docker ───────────────────────────────────────────────────
-step "Docker"
+detect_distro
+info "Detected: ${DISTRO_FAMILY} (${PKG_MANAGER})"
+
+# ── Step 1: Docker ──────────────────────────────────────────────
+step "Docker" "~1 min if not installed"
 
 if command -v docker &>/dev/null; then
     info "Already installed: $(docker --version | head -1)"
 else
-    echo -e "  ${DIM}Docker not found — installing via official script …${NC}"
-    echo -e "  ${DIM}(supports Ubuntu, Debian, Fedora, CentOS, Arch, SUSE, and more)${NC}"
-
-    if ! command -v curl &>/dev/null; then
-        # Install curl using whatever package manager is available
-        if command -v apt-get &>/dev/null; then
-            apt-get update -qq 2>&1 | grep -v "^W:" || true
-            apt-get install -y -qq curl >/dev/null 2>&1
-        elif command -v dnf &>/dev/null; then
-            dnf install -y -q curl >/dev/null 2>&1
-        elif command -v pacman &>/dev/null; then
-            pacman -Sy --noconfirm curl >/dev/null 2>&1
-        elif command -v zypper &>/dev/null; then
-            zypper install -y curl >/dev/null 2>&1
-        else
-            die "curl not found and no known package manager to install it"
-        fi
-    fi
-
-    DOCKER_LOG="/tmp/maxhub-docker-install.log"
-    if command -v pacman &>/dev/null; then
-        # Arch Linux — get.docker.com doesn't support it
-        (pacman -Sy --noconfirm docker >"$DOCKER_LOG" 2>&1) &
-        spinner $! "Installing Docker (pacman) …"
-    else
-        # All other distros — official Docker script
-        (curl -fsSL https://get.docker.com | sh -s -- >"$DOCKER_LOG" 2>&1) &
-        spinner $! "Installing Docker …"
-    fi
-
-    if ! command -v docker &>/dev/null; then
-        error "Install log: $DOCKER_LOG"
-        die "Docker installation failed. Install manually: https://docs.docker.com/engine/install/"
-    fi
-
+    install_docker
     info "Docker installed: $(docker --version | head -1)"
 fi
 
-# Start Docker if not running, and enable on boot
+# Start Docker if not running
 if ! docker info &>/dev/null 2>&1; then
     systemctl start docker 2>/dev/null || service docker start 2>/dev/null || true
+
+    # Verify it actually started (retry up to 10 seconds)
+    retries=0
+    while ! docker info &>/dev/null 2>&1; do
+        retries=$((retries + 1))
+        if [[ $retries -ge 10 ]]; then
+            die "Docker failed to start. Check: journalctl -u docker"
+        fi
+        sleep 1
+    done
+    info "Docker daemon started"
 fi
+
+# Enable Docker on boot
 systemctl enable docker 2>/dev/null || true
 
 # Add user to docker group
-if ! groups "$REAL_USER" | grep -q docker; then
+if ! id -nG "$REAL_USER" 2>/dev/null | grep -qw docker; then
     usermod -aG docker "$REAL_USER"
+    DOCKER_GROUP_ADDED=true
     info "Added $REAL_USER to docker group"
 else
     info "$REAL_USER already in docker group"
 fi
 
-# ── Step 2: Wine container image ─────────────────────────────────────
-step "Wine 11+ container image"
+step_done
+
+# ── Step 2: Wine container image ────────────────────────────────
+step "Wine 11+ container image" "~1-2 min if not cached"
 
 IMAGE_READY=false
 
@@ -189,11 +293,19 @@ if [[ "$IMAGE_READY" == false ]]; then
 fi
 
 info "Docker image '$IMAGE_NAME' ready"
-WINE_VER=$(docker run --rm "$IMAGE_NAME" --version 2>/dev/null || echo "unknown")
-info "Wine version in container: $WINE_VER"
 
-# ── Step 3: Udev rule ───────────────────────────────────────────────
-step "USB device permissions"
+# Verify Wine works in the image
+WINE_VER=$(docker run --rm "$IMAGE_NAME" --version 2>/dev/null) || WINE_VER=""
+if [[ "$WINE_VER" == *"wine-"* ]]; then
+    info "Wine version in container: $WINE_VER"
+else
+    warn "Wine verification: ${WINE_VER:-no response} (may still work at runtime)"
+fi
+
+step_done
+
+# ── Step 3: Udev rule ──────────────────────────────────────────
+step "USB device permissions" "~1 sec"
 
 cat > "$UDEV_RULE" << 'UDEV'
 # MAXHUB WT13 Wireless Dongle (VID:1FF7 PID:0F52)
@@ -201,16 +313,22 @@ cat > "$UDEV_RULE" << 'UDEV'
 SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1ff7", ATTRS{idProduct}=="0f52", MODE="0666", ENV{ID_INPUT}="1", ENV{ID_INPUT_TOUCHSCREEN}="1"
 SUBSYSTEM=="usb", ATTR{idVendor}=="1ff7", ATTR{idProduct}=="0f52", MODE="0666"
 UDEV
-
-if udevadm control --reload-rules 2>/dev/null && udevadm trigger 2>/dev/null; then
-    info "Udev rules installed and reloaded"
-else
-    warn "Could not reload udev rules — will apply on next boot"
-fi
 info "Rule file: $UDEV_RULE"
 
-# ── Step 4: Copy MAXHUB.exe ─────────────────────────────────────────
-step "Locating MAXHUB.exe"
+if command -v udevadm &>/dev/null; then
+    if udevadm control --reload-rules 2>/dev/null && udevadm trigger 2>/dev/null; then
+        info "Udev rules reloaded"
+    else
+        warn "Could not reload udev rules — will apply on next boot"
+    fi
+else
+    warn "udevadm not found — rules will apply on next boot"
+fi
+
+step_done
+
+# ── Step 4: Copy MAXHUB.exe ────────────────────────────────────
+step "Locating MAXHUB.exe" "~1 sec"
 
 mkdir -p "$INSTALL_DIR"
 
@@ -254,8 +372,10 @@ else
     warn "Copy manually later:  sudo cp /path/to/$EXE_NAME $INSTALL_DIR/"
 fi
 
-# ── Step 5: Launcher + desktop entry ─────────────────────────────────
-step "Creating launcher"
+step_done
+
+# ── Step 5: Launcher + desktop entry ───────────────────────────
+step "Creating launcher" "~1 sec"
 
 cat > "$LAUNCHER" << 'LAUNCHER_SCRIPT'
 #!/usr/bin/env bash
@@ -335,24 +455,39 @@ Categories=Utility;Network;
 Keywords=maxhub;dongle;screen;sharing;wireless;
 DESKTOP
 chmod 644 "$DESKTOP_FILE"
-update-desktop-database /usr/share/applications 2>/dev/null || true
+if command -v update-desktop-database &>/dev/null; then
+    update-desktop-database /usr/share/applications 2>/dev/null || true
+fi
 info "Desktop entry: MAXHUB Dongle (in app menu)"
 
-# ── Step 6: Finalize ─────────────────────────────────────────────────
-step "Finishing up"
+step_done
+
+# ── Step 6: Finalize ───────────────────────────────────────────
+step "Finishing up" "~1 sec"
 
 chown -R "$REAL_USER":"$REAL_USER" "$INSTALL_DIR"
 info "Ownership set to $REAL_USER"
 
-# ── Summary ──────────────────────────────────────────────────────────
+step_done
+
+# ── Summary ──────────────────────────────────────────────────────
+TOTAL_ELAPSED=$(( $(date +%s) - SCRIPT_START_TIME ))
+if [[ $TOTAL_ELAPSED -ge 60 ]]; then
+    TIME_STR="$((TOTAL_ELAPSED/60))m $((TOTAL_ELAPSED%60))s"
+else
+    TIME_STR="${TOTAL_ELAPSED}s"
+fi
+
 echo ""
 echo -e "${BOLD}${GREEN}"
 echo "  ╔═══════════════════════════════════════════╗"
 echo "  ║        Installation complete!              ║"
 echo "  ╚═══════════════════════════════════════════╝"
 echo -e "${NC}"
+echo -e "  ${BOLD}Total time: ${CYAN}${TIME_STR}${NC}"
+echo ""
 echo -e "  ${BOLD}Installed:${NC}"
-echo -e "  ${DIM}├─${NC} Docker image  : ${CYAN}$IMAGE_NAME${NC} (Wine $WINE_VER)"
+echo -e "  ${DIM}├─${NC} Docker image  : ${CYAN}$IMAGE_NAME${NC} (Wine ${WINE_VER:-unknown})"
 echo -e "  ${DIM}├─${NC} Udev rule     : ${CYAN}$UDEV_RULE${NC}"
 echo -e "  ${DIM}├─${NC} Launcher      : ${CYAN}$LAUNCHER${NC}"
 echo -e "  ${DIM}└─${NC} Desktop entry : ${CYAN}MAXHUB Dongle${NC}"
@@ -370,10 +505,9 @@ else
 fi
 
 echo ""
-NEEDS_RELOGIN=false
-if ! groups "$REAL_USER" | grep -q docker; then
+if [[ "$DOCKER_GROUP_ADDED" == true ]]; then
     echo -e "  ${YELLOW}⚠${NC} ${BOLD}Log out and back in${NC} for Docker permissions to take effect."
-    NEEDS_RELOGIN=true
+    echo -e "  ${DIM}  (or the launcher will use a workaround automatically)${NC}"
 fi
 echo -e "  ${DIM}If the dongle is plugged in, unplug and replug it.${NC}"
 echo ""
