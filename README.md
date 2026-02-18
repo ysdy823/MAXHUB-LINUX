@@ -1,13 +1,13 @@
 # MAXHUB Wireless Dongle — Linux Installer
 
-[![Linux](https://img.shields.io/badge/Linux-any_distro-FCC624?logo=linux&logoColor=black)](https://kernel.org)
-[![Docker](https://img.shields.io/badge/Docker-required-2496ED?logo=docker&logoColor=white)](https://docker.com)
-[![Wine 11+](https://img.shields.io/badge/Wine-11.2+_(in_container)-722F37?logo=wine&logoColor=white)](https://www.winehq.org/)
+[![Linux](https://img.shields.io/badge/Linux-any_64--bit_distro-FCC624?logo=linux&logoColor=black)](https://kernel.org)
+[![Wine 11.2](https://img.shields.io/badge/Wine-11.2_portable-722F37?logo=wine&logoColor=white)](https://www.winehq.org/)
+[![Download ~70MB](https://img.shields.io/badge/Download-~70MB-brightgreen)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 One-command installer for the **MAXHUB WT13** wireless screen sharing dongle on Linux.
 
-Wine runs inside a Docker container — **your system packages are never modified**.
+Downloads a portable Wine build (~70MB) — **no Docker, no system packages modified**.
 
 <div dir="rtl">
 
@@ -20,7 +20,7 @@ Wine runs inside a Docker container — **your system packages are never modifie
 הדונגל של MAXHUB מגיע עם תוכנה לווינדוס בלבד (MAXHUB.exe).
 Wine רגיל (גרסה 9.0 ומטה) לא עובד — ה-UDEV bus שלו לא נטען, ו-Wine לא רואה את ההתקן.
 
-הסקריפט הזה מריץ **Wine 11.2+** בתוך Docker — בלי לגעת בחבילות שלכם.
+הסקריפט הזה מוריד **Wine 11.2 portable** (~70MB) — בלי Docker, בלי לגעת בחבילות שלכם.
 
 ### דרישות
 - לינוקס 64 ביט (אובונטו, דביאן, פדורה, Arch, openSUSE, CentOS ועוד)
@@ -39,30 +39,33 @@ sudo bash maxhub-linux-install.sh
 
 <div dir="rtl">
 
-זמן התקנה משוער: **~2-4 דקות** (מהיר יותר אם Docker כבר מותקן)
+זמן התקנה משוער: **~30 שניות**
 
 ### איך זה עובד?
 
 ```
-  המחשב שלכם                    Docker container
- ┌──────────────┐              ┌──────────────────┐
- │              │   hidraw     │                  │
- │  USB Dongle ─┼──────────►  │  Wine 11.2+      │
- │              │   X11        │  MAXHUB.exe      │
- │  Desktop    ◄┼──────────── │                  │
- │              │              │  (Debian bookworm)│
- └──────────────┘              └──────────────────┘
+  המחשב שלכם
+ ┌──────────────────────────────────┐
+ │                                  │
+ │  USB Dongle ──► Wine 11.2        │
+ │                 (portable)       │
+ │                 MAXHUB.exe       │
+ │  Desktop    ◄── X11 window       │
+ │                                  │
+ └──────────────────────────────────┘
 ```
+
+Wine רץ ישירות — בלי Docker, בלי קונטיינרים. כמו Steam/Proton.
 
 ### מה הסקריפט עושה?
 
 | שלב | פעולה | זמן צפוי | נוגע בחבילות שלכם? |
 |:---:|-------|:---------:|:-------------------:|
-| 1 | מתקין Docker (אם לא קיים) | ~1 דק' | לא |
-| 2 | מוריד image מוכן עם Wine 11+ | ~1-2 דק' | לא |
-| 3 | יוצר udev rule להרשאות הדונגל | ~1 שנ' | לא |
-| 4 | מעתיק MAXHUB.exe מכונן USB | ~1 שנ' | לא |
-| 5 | יוצר קיצור דרך + סקריפט הפעלה | ~1 שנ' | לא |
+| 1 | מוריד Wine 11.2 portable (~70MB) | ~10 שנ' | לא |
+| 2 | יוצר udev rule להרשאות הדונגל | ~1 שנ' | לא |
+| 3 | מעתיק MAXHUB.exe מכונן USB | ~1 שנ' | לא |
+| 4 | יוצר קיצור דרך + סקריפט הפעלה | ~1 שנ' | לא |
+| 5 | מסיים | ~1 שנ' | לא |
 
 **אף חבילה במערכת שלכם לא תשתנה, תימחק, או תתנגש.**
 
@@ -99,14 +102,6 @@ sudo bash maxhub-linux-install.sh
 </details>
 
 <details>
-<summary><b>שגיאת Docker permissions</b></summary>
-
-אם מקבלים שגיאה על הרשאות Docker, התנתקו והתחברו מחדש (או הריצו `newgrp docker`).
-הלאנצ'ר ינסה לפתור את זה אוטומטית, אבל logout/login הוא הפתרון הנקי.
-
-</details>
-
-<details>
 <summary><b>Wayland — מסך שחור או שגיאת display</b></summary>
 
 הכלי דורש X11. אם אתם על Wayland, ודאו ש-XWayland מופעל (ברוב הדיסטרואים הוא מופעל כברירת מחדל).
@@ -127,16 +122,11 @@ sudo cp /media/$USER/MAXHUB_USB/MAXHUB.exe /opt/maxhub-dongle/
 <summary><b>הסרת התקנה</b></summary>
 
 ```bash
-# הסרת הקבצים
 sudo rm -rf /opt/maxhub-dongle
 sudo rm -f /etc/udev/rules.d/99-maxhub-dongle.rules
 sudo rm -f /usr/share/applications/maxhub-dongle.desktop
 sudo udevadm control --reload-rules
-
-# הסרת Docker image
-docker rmi maxhub-dongle
 ```
-Docker עצמו ישאר — הסירו בנפרד אם תרצו.
 
 </details>
 
@@ -148,20 +138,23 @@ Docker עצמו ישאר — הסירו בנפרד אם תרצו.
 
 ### What is this?
 An installer for the **MAXHUB WT13** wireless screen sharing dongle on Linux.
-Wine runs inside a Docker container — **your system packages are never touched**.
+Downloads a portable Wine build (~70MB) — **no Docker, no system packages modified**.
 
 ### How it works
 
 ```
-  Your system                    Docker container
- ┌──────────────┐              ┌──────────────────┐
- │              │   hidraw     │                  │
- │  USB Dongle ─┼──────────►  │  Wine 11.2+      │
- │              │   X11        │  MAXHUB.exe      │
- │  Desktop    ◄┼──────────── │                  │
- │              │              │  (Debian bookworm)│
- └──────────────┘              └──────────────────┘
+  Your system
+ ┌──────────────────────────────────┐
+ │                                  │
+ │  USB Dongle ──► Wine 11.2        │
+ │                 (portable)       │
+ │                 MAXHUB.exe       │
+ │  Desktop    ◄── X11 window       │
+ │                                  │
+ └──────────────────────────────────┘
 ```
+
+Wine runs directly — no Docker, no containers. Like Steam/Proton.
 
 ### Requirements
 - Linux amd64 (Ubuntu, Fedora, Debian, Arch, openSUSE, CentOS, and more)
@@ -176,17 +169,17 @@ cd MAXHUB-LINUX
 sudo bash maxhub-linux-install.sh
 ```
 
-Estimated time: **~2-4 minutes** (faster if Docker is already installed)
+Estimated time: **~30 seconds**
 
 ### What the script does
 
 | Step | Action | Est. time | Touches your packages? |
 |:----:|--------|:---------:|:----------------------:|
-| 1 | Installs Docker (if not present) | ~1 min | No |
-| 2 | Pulls pre-built Wine 11+ image | ~1-2 min | No |
-| 3 | Creates udev rule for dongle permissions | ~1 sec | No |
-| 4 | Copies MAXHUB.exe from USB drive | ~1 sec | No |
-| 5 | Creates desktop launcher + shell script | ~1 sec | No |
+| 1 | Downloads Wine 11.2 portable (~70MB) | ~10 sec | No |
+| 2 | Creates udev rule for dongle permissions | ~1 sec | No |
+| 3 | Copies MAXHUB.exe from USB drive | ~1 sec | No |
+| 4 | Creates desktop launcher + shell script | ~1 sec | No |
+| 5 | Finishes up | ~1 sec | No |
 
 **No system packages are modified, removed, or conflicted with.**
 
@@ -210,14 +203,6 @@ Or search for "MAXHUB Dongle" in your application menu.
 </details>
 
 <details>
-<summary><b>Docker permission denied</b></summary>
-
-Log out and log back in (or run `newgrp docker`).
-The launcher will try to work around this automatically, but logout/login is the clean fix.
-
-</details>
-
-<details>
 <summary><b>Wayland — black screen or display error</b></summary>
 
 This tool requires X11. If you're on Wayland, make sure XWayland is enabled (it is by default on most distros).
@@ -232,7 +217,6 @@ sudo rm -rf /opt/maxhub-dongle
 sudo rm -f /etc/udev/rules.d/99-maxhub-dongle.rules
 sudo rm -f /usr/share/applications/maxhub-dongle.desktop
 sudo udevadm control --reload-rules
-docker rmi maxhub-dongle
 ```
 
 </details>
@@ -244,9 +228,11 @@ docker rmi maxhub-dongle
 | **Device** | MAXHUB WT13 |
 | **USB ID** | `1FF7:0F52` |
 | **Protocol** | USB HID with TCP/IP tunnel (`dongle_lwip_hid.dll`) |
-| **Wine** | 11.2+ in Docker (Debian bookworm base) |
-| **Isolation** | Full — Wine never installed on host |
-| **Supported** | Ubuntu, Debian, Fedora, CentOS/RHEL, Arch, Manjaro, openSUSE, and more |
+| **Wine** | 11.2 portable ([Kron4ek/Wine-Builds](https://github.com/Kron4ek/Wine-Builds)) |
+| **WoW64** | 64-bit Wine running 32-bit apps — no i386 libs needed |
+| **Download** | ~70MB (wine-11.2-amd64-wow64.tar.xz) |
+| **Isolation** | Self-contained in `/opt/maxhub-dongle/wine/` |
+| **Supported** | Any 64-bit Linux with X11 |
 
 ## License
 

@@ -9,8 +9,13 @@ Thumbs.db
 *.swo
 *~
 
-# Wine prefix (don't track user data)
+# Wine (portable build — downloaded at install time)
+wine/
+.wineprefix/
 wineprefix/
 
 # Logs
 *.log
+
+# Tarballs
+*.tar.xz
