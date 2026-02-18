@@ -243,25 +243,19 @@ if [[ -z "$EXE_FOUND" ]]; then
 fi
 
 if [[ -n "$EXE_FOUND" ]]; then
-    cp "$EXE_FOUND" "$INSTALL_DIR/$EXE_NAME"
-    # Copy DLLs from same directory and from USB root
+    # Copy ALL files from the USB directory (exe, dlls, data files, configs)
     EXE_DIR=$(dirname "$EXE_FOUND")
-    shopt -s nullglob
-    for dll in "$EXE_DIR"/*.dll "$EXE_DIR"/*.DLL; do
-        cp "$dll" "$INSTALL_DIR/"
-        info "Copied: $(basename "$dll")"
+    FILE_COUNT=0
+    for f in "$EXE_DIR"/*; do
+        [[ -f "$f" ]] || continue
+        BASENAME=$(basename "$f")
+        # Skip Windows autorun
+        [[ "${BASENAME,,}" == "autorun.inf" ]] && continue
+        cp "$f" "$INSTALL_DIR/"
+        info "Copied: $BASENAME"
+        FILE_COUNT=$((FILE_COUNT + 1))
     done
-    # Also search one level up and in common subdirectories
-    USB_ROOT=$(findmnt -n -o TARGET --target "$EXE_FOUND" 2>/dev/null || dirname "$EXE_DIR")
-    if [[ -d "$USB_ROOT" && "$USB_ROOT" != "$EXE_DIR" ]]; then
-        for dll in "$USB_ROOT"/*.dll "$USB_ROOT"/*.DLL; do
-            [[ -f "$INSTALL_DIR/$(basename "$dll")" ]] && continue
-            cp "$dll" "$INSTALL_DIR/"
-            info "Copied: $(basename "$dll") (from USB root)"
-        done
-    fi
-    shopt -u nullglob
-    info "MAXHUB.exe copied to $INSTALL_DIR/"
+    info "$FILE_COUNT files copied to $INSTALL_DIR/"
 elif [[ -f "$INSTALL_DIR/$EXE_NAME" ]]; then
     info "$EXE_NAME already in $INSTALL_DIR"
 else
