@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# MAXHUB Wireless Dongle — Linux Installer v4.0.8 (Wine Portable)
+# MAXHUB Wireless Dongle — Linux Installer v4.0.9 (Wine Portable)
 #
 # Downloads a portable Wine 11.2 build (~70MB) — no Docker, no system packages.
 # Only touches: one udev rule, Wine in /opt, and launcher files.
@@ -138,7 +138,7 @@ echo ""
 echo -e "${BOLD}${CYAN}"
 echo "  ╔═══════════════════════════════════════════╗"
 echo "  ║   MAXHUB Wireless Dongle — Installer      ║"
-echo "  ║   Wine Portable  v4.0.8                    ║"
+echo "  ║   Wine Portable  v4.0.9                    ║"
 echo "  ╚═══════════════════════════════════════════╝"
 echo -e "${NC}"
 echo -e "  ${DIM}Portable Wine — no Docker, no system packages modified.${NC}"
@@ -192,9 +192,18 @@ else
     info "Wine installed: $WINE_VER"
 fi
 
-# Disable crash dialog — remove winedbg so it can never spawn
-# (RemoteLoader.exe crashes are harmless but winedbg opens console windows)
-find "$WINE_DIR" -name "winedbg*" -delete 2>/dev/null || true
+# Disable crash dialog — remove winedbg everywhere it may exist
+WINEDBG_FOUND=0
+while IFS= read -r -d '' f; do
+    rm -f "$f" && info "Removed: $f"
+    WINEDBG_FOUND=$((WINEDBG_FOUND + 1))
+done < <(find "$WINE_DIR" /usr/bin /usr/lib /usr/local -name "winedbg*" -print0 2>/dev/null)
+
+if [[ $WINEDBG_FOUND -gt 0 ]]; then
+    info "Removed $WINEDBG_FOUND winedbg file(s) — crash dialogs disabled"
+else
+    info "No winedbg found — crash dialogs already disabled"
+fi
 
 step_done
 
@@ -347,7 +356,7 @@ Name=MAXHUB Dongle
 Comment=MAXHUB Wireless Screen Sharing Dongle
 Exec=/opt/maxhub-dongle/maxhub-dongle.sh
 Icon=video-display
-Terminal=false
+Terminal=true
 Categories=Utility;Network;
 Keywords=maxhub;dongle;screen;sharing;wireless;
 DESKTOP
@@ -413,9 +422,13 @@ if [[ -f "$INSTALL_DIR/$EXE_NAME" ]] && [[ -n "${DISPLAY:-}" ]]; then
     echo -e "  ${BOLD}Launching MAXHUB …${NC}"
     echo ""
     REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
+    LOG_FILE="$INSTALL_DIR/logs/maxhub.log"
+    mkdir -p "$INSTALL_DIR/logs"
+    chown "$REAL_USER":"$REAL_USER" "$INSTALL_DIR/logs"
     nohup sudo -u "$REAL_USER" env \
         DISPLAY="$DISPLAY" \
         XAUTHORITY="${XAUTHORITY:-$REAL_HOME/.Xauthority}" \
-        "$LAUNCHER" >/dev/null 2>&1 &
+        "$LAUNCHER" >>"$LOG_FILE" 2>&1 &
     disown
+    echo -e "  ${DIM}Logs: tail -f $LOG_FILE${NC}"
 fi
