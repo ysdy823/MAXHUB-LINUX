@@ -41,6 +41,18 @@ sudo bash maxhub-linux-install.sh
 
 זמן התקנה משוער: **~30 שניות**
 
+### עדכון גרסה
+
+אם כבר התקנתם בעבר:
+
+</div>
+
+```bash
+cd ~/MAXHUB-LINUX && git pull && sudo bash maxhub-linux-install.sh
+```
+
+<div dir="rtl">
+
 ### איך זה עובד?
 
 ```
@@ -170,6 +182,14 @@ sudo bash maxhub-linux-install.sh
 ```
 
 Estimated time: **~30 seconds**
+
+### Update
+
+If you already installed previously:
+
+```bash
+cd ~/MAXHUB-LINUX && git pull && sudo bash maxhub-linux-install.sh
+```
 
 ### What the script does
 
