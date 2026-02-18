@@ -300,9 +300,10 @@ if [[ -z "${DISPLAY:-}" ]]; then
     exit 1
 fi
 
-# First launch: Wine creates prefix automatically (~10s)
+# First launch: create prefix directory and let Wine initialize it (~10s)
 if [[ ! -d "$WINEPREFIX" ]]; then
     echo "First launch — setting up Wine (~10 seconds) …"
+    mkdir -p "$WINEPREFIX"
 fi
 
 cd "$INSTALL_DIR"
