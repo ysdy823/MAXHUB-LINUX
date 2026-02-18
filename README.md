@@ -48,7 +48,7 @@ sudo bash maxhub-linux-install.sh
  │  USB Dongle ─┼──────────►  │  Wine 11.2+      │
  │              │   X11        │  MAXHUB.exe      │
  │  Desktop    ◄┼──────────── │                  │
- │              │              │  (Ubuntu 24.04)  │
+ │              │              │  (Debian bookworm)│
  └──────────────┘              └──────────────────┘
 ```
 
@@ -149,7 +149,7 @@ Wine runs inside a Docker container — **your system packages are never touched
  │  USB Dongle ─┼──────────►  │  Wine 11.2+      │
  │              │   X11        │  MAXHUB.exe      │
  │  Desktop    ◄┼──────────── │                  │
- │              │              │  (Ubuntu 24.04)  │
+ │              │              │  (Debian bookworm)│
  └──────────────┘              └──────────────────┘
 ```
 
@@ -224,7 +224,7 @@ docker rmi maxhub-dongle
 | **Device** | MAXHUB WT13 |
 | **USB ID** | `1FF7:0F52` |
 | **Protocol** | USB HID with TCP/IP tunnel (`dongle_lwip_hid.dll`) |
-| **Wine** | 11.2+ in Docker (Ubuntu 24.04 base) |
+| **Wine** | 11.2+ in Docker (Debian bookworm base) |
 | **Isolation** | Full — Wine never installed on host |
 | **Tested on** | Ubuntu 22.04, Ubuntu 24.04, Fedora, Debian |
 

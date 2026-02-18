@@ -79,7 +79,6 @@ echo ""
 [[ $EUID -eq 0 ]] || die "This script must be run as root.  Try:  sudo bash $0"
 
 REAL_USER="${SUDO_USER:-$USER}"
-REAL_HOME=$(getent passwd "$REAL_USER" | cut -d: -f6)
 
 # ── Step 1: Docker ───────────────────────────────────────────────────
 step "Docker"
@@ -106,13 +105,19 @@ else
         fi
     fi
 
-    # Docker's official install script — works on all major distros
-    (
-        curl -fsSL https://get.docker.com | sh -s -- 2>&1
-    ) &
-    spinner $! "Installing Docker …"
+    DOCKER_LOG="/tmp/maxhub-docker-install.log"
+    if command -v pacman &>/dev/null; then
+        # Arch Linux — get.docker.com doesn't support it
+        (pacman -Sy --noconfirm docker >"$DOCKER_LOG" 2>&1) &
+        spinner $! "Installing Docker (pacman) …"
+    else
+        # All other distros — official Docker script
+        (curl -fsSL https://get.docker.com | sh -s -- >"$DOCKER_LOG" 2>&1) &
+        spinner $! "Installing Docker …"
+    fi
 
     if ! command -v docker &>/dev/null; then
+        error "Install log: $DOCKER_LOG"
         die "Docker installation failed. Install manually: https://docs.docker.com/engine/install/"
     fi
 
@@ -260,11 +265,32 @@ INSTALL_DIR="/opt/maxhub-dongle"
 IMAGE_NAME="maxhub-dongle"
 EXE="$INSTALL_DIR/MAXHUB.exe"
 
+# ── Pre-launch checks ──────────────────────────────────────────
+if ! command -v docker &>/dev/null; then
+    echo "Error: Docker is not installed."
+    exit 1
+fi
+
+if ! docker info &>/dev/null 2>&1; then
+    echo "Error: Docker is not running. Start it with: sudo systemctl start docker"
+    exit 1
+fi
+
+if [[ -z "${DISPLAY:-}" ]]; then
+    echo "Error: No display found (\$DISPLAY is empty)."
+    echo "This tool requires X11. Wayland without XWayland is not supported."
+    echo "If you use Wayland, make sure XWayland is enabled."
+    exit 1
+fi
+
 if [[ ! -f "$EXE" ]]; then
     echo "Error: $EXE not found."
     echo "Copy MAXHUB.exe to $INSTALL_DIR/ first."
     exit 1
 fi
+
+# Allow Docker container to access X11 display
+xhost +local:docker >/dev/null 2>&1 || true
 
 # Collect all hidraw devices for the dongle
 HIDRAW_ARGS=""

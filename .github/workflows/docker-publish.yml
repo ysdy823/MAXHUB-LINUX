@@ -1,5 +1,10 @@
 name: Build and Push Docker Image
 
+# IMPORTANT: After the first successful run, the ghcr.io package defaults to PRIVATE.
+# You must manually set it to public:
+#   GitHub → Packages → maxhub-dongle → Package settings → Change visibility → Public
+# Without this, `docker pull` will fail for all users with "unauthorized".
+
 on:
   push:
     branches: [main]

@@ -16,7 +16,7 @@ RUN dpkg --add-architecture i386 && \
     apt-get install -y --install-recommends winehq-devel && \
     apt-get remove -y --purge wine-mono 2>/dev/null || true && \
     # Clean up build-only packages
-    apt-get purge -y --auto-remove wget gnupg2 software-properties-common && \
+    apt-get purge -y --auto-remove wget gnupg2 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
            /usr/share/wine/mono /usr/share/wine/gecko \
