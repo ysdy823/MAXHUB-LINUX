@@ -188,6 +188,11 @@ else
         die "Wine binary not found after extraction. Something went wrong."
     fi
 
+    # Disable crash dialog — remove winedbg so it can never spawn
+    # (RemoteLoader.exe crashes are harmless but winedbg opens console windows)
+    find "$WINE_DIR" -name "winedbg*" -delete 2>/dev/null || true
+    info "Crash dialogs disabled"
+
     WINE_VER=$("$WINE_DIR/bin/wine" --version 2>/dev/null || echo "unknown")
     info "Wine installed: $WINE_VER"
 fi
@@ -303,14 +308,10 @@ if [[ -z "${DISPLAY:-}" ]]; then
     exit 1
 fi
 
-# First launch: create prefix directory and let Wine initialize it (~10s)
+# First launch: create prefix directory (Wine auto-initializes on exec)
 if [[ ! -d "$WINEPREFIX/drive_c" ]]; then
     echo "First launch — setting up Wine (~10 seconds) …"
     mkdir -p "$WINEPREFIX"
-    # Initialize prefix and disable crash dialog (RemoteLoader.exe crashes are harmless)
-    "$WINE" wineboot --init 2>/dev/null || true
-    "$WINE" reg add 'HKLM\Software\Microsoft\Windows NT\CurrentVersion\AeDebug' \
-        /v Debugger /t REG_SZ /d "" /f 2>/dev/null || true
 fi
 
 cd "$INSTALL_DIR"
