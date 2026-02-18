@@ -45,8 +45,8 @@ info "Adding WineHQ repository …"
 # Enable 32-bit architecture (required by Wine)
 dpkg --add-architecture i386
 
-# Install prerequisites
-apt-get update -qq
+# Install prerequisites (suppress warnings from unrelated third-party repos)
+apt-get update -qq 2>&1 | grep -v "^W:" >&2 || true
 apt-get install -y -qq wget gnupg2 software-properties-common >/dev/null
 
 # Add WineHQ GPG key
@@ -72,7 +72,7 @@ fi
 
 # ── 2. Install Wine ─────────────────────────────────────────────────
 info "Installing Wine (winehq-devel) — this may take a while …"
-apt-get update -qq
+apt-get update -qq 2>&1 | grep -v "^W:" >&2 || true
 apt-get install -y --install-recommends winehq-devel >/dev/null 2>&1 || \
     apt-get install -y --install-recommends winehq-devel
 
