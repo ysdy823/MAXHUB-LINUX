@@ -280,6 +280,9 @@ EXE="$INSTALL_DIR/MAXHUB.exe"
 export WINEPREFIX="$INSTALL_DIR/.wineprefix"
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export WINEDEBUG=-all
+# Software rendering avoids NVIDIA/wow64 OpenGL crashes (GL 4.6→4.3 cap)
+# Screen sharing tool doesn't need GPU acceleration
+export LIBGL_ALWAYS_SOFTWARE=1
 
 if [[ ! -f "$EXE" ]]; then
     echo "Error: $EXE not found."
