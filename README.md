@@ -80,7 +80,28 @@ Wine רץ ישירות — בלי Docker, בלי קונטיינרים. כמו St
 
 <div dir="rtl">
 
+| פקודה | תיאור |
+|-------|-------|
+| `maxhub-dongle.sh` | הפעלה רגילה |
+| `maxhub-dongle.sh --status` | דיאגנוסטיקה — עובד גם כש-MAXHUB כבר רץ |
+| `maxhub-dongle.sh --help` | עזרה מהירה |
+
+> **התראות GUI** מופיעות אוטומטית (שגיאות, קריסות, חיבור דונגל) — לא צריך לפתוח טרמינל כדי לראות מה קורה.
+
 ### פתרון בעיות
+
+> **צעד ראשון תמיד:** הריצו `maxhub-dongle.sh --status` — הפלט יראה לכם בדיוק מה מותקן, מה חסר, ומה מצב הדונגל.
+
+<details>
+<summary><b>עדכון גרסה</b></summary>
+
+```bash
+cd MAXHUB-LINUX
+git pull
+sudo bash maxhub-linux-install.sh
+```
+
+</details>
 
 <details>
 <summary><b>הדונגל לא מזוהה</b></summary>
@@ -190,7 +211,28 @@ Estimated time: **~30 seconds**
 ```
 Or search for "MAXHUB Dongle" in your application menu.
 
+| Command | Description |
+|---------|-------------|
+| `maxhub-dongle.sh` | Normal launch |
+| `maxhub-dongle.sh --status` | Diagnostics — works even while MAXHUB is running |
+| `maxhub-dongle.sh --help` | Quick help |
+
+> **GUI notifications** appear automatically (errors, crashes, dongle connection) — no need to open a terminal to see what's happening.
+
 ### Troubleshooting
+
+> **First step, always:** run `maxhub-dongle.sh --status` — the output will show you exactly what's installed, what's missing, and the dongle status.
+
+<details>
+<summary><b>Upgrade version</b></summary>
+
+```bash
+cd MAXHUB-LINUX
+git pull
+sudo bash maxhub-linux-install.sh
+```
+
+</details>
 
 <details>
 <summary><b>Dongle not detected</b></summary>
