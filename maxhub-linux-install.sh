@@ -311,13 +311,16 @@ export WINEPREFIX="$INSTALL_DIR/.wineprefix"
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export WINEDEBUG=-all
 
-# ── Instance lock (prevent duplicate launches) ────────────────
-LOCK_FILE="$INSTALL_DIR/.maxhub.lock"
-exec 9>"$LOCK_FILE"
-if ! flock -n 9; then
-    echo "MAXHUB is already running."
-    exit 0
-fi
+# ── GUI notifications (graceful fallback if notify-send missing) ──
+HAS_NOTIFY=false
+command -v notify-send &>/dev/null && HAS_NOTIFY=true
+
+notify() {
+    $HAS_NOTIFY || return 0
+    local summary="$1" body="${2:-}" urgency="${3:-normal}"
+    notify-send --app-name="MAXHUB Dongle" --icon=video-display \
+        --urgency="$urgency" "$summary" "$body" &>/dev/null &
+}
 
 # ── Logging ────────────────────────────────────────────────────
 LOG_DIR="$INSTALL_DIR/logs"
@@ -329,6 +332,101 @@ LOG_FILE="$LOG_DIR/maxhub.log"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 
+# ── --help / --status ─────────────────────────────────────────
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    cat <<EOF
+Usage: maxhub-dongle.sh [OPTIONS]
+
+Options:
+  --help, -h      Show this help message
+  --status         Show diagnostics (works even while MAXHUB is running)
+
+Without options, launches the MAXHUB Wireless Dongle application.
+Log file: $LOG_DIR/maxhub.log
+EOF
+    exit 0
+fi
+
+if [[ "${1:-}" == "--status" ]]; then
+    echo "=== MAXHUB Dongle Diagnostics ==="
+    echo
+
+    # Process status
+    LOCK_FILE="$INSTALL_DIR/.maxhub.lock"
+    if ( exec 9>"$LOCK_FILE" && flock -n 9 ) 2>/dev/null; then
+        echo "Process:      NOT running"
+    else
+        echo "Process:      RUNNING (lock held)"
+    fi
+
+    # Wine
+    if [[ -x "$WINE" ]]; then
+        echo "Wine:         $("$WINE" --version 2>/dev/null || echo 'error getting version')"
+        echo "Wine path:    $WINE"
+    else
+        echo "Wine:         NOT FOUND at $WINE"
+    fi
+
+    # EXE
+    if [[ -f "$EXE" ]]; then
+        echo "MAXHUB.exe:   found ($(du -h "$EXE" 2>/dev/null | cut -f1))"
+    else
+        echo "MAXHUB.exe:   NOT FOUND at $EXE"
+    fi
+
+    # WINEPREFIX
+    if [[ -d "$WINEPREFIX/drive_c" ]]; then
+        echo "WINEPREFIX:   initialized ($(du -sh "$WINEPREFIX" 2>/dev/null | cut -f1))"
+        [[ -f "$WINEPREFIX/system.reg" ]] && echo "  system.reg: present" || echo "  system.reg: MISSING"
+    else
+        echo "WINEPREFIX:   not initialized"
+    fi
+
+    # Display
+    echo "DISPLAY:      ${DISPLAY:-unset}"
+    echo "Session:      ${XDG_SESSION_TYPE:-unknown}"
+    [[ -n "${WAYLAND_DISPLAY:-}" ]] && echo "Wayland:      $WAYLAND_DISPLAY"
+
+    # GPU
+    echo "GPU:          $(lspci 2>/dev/null | grep -i 'vga\|3d\|display' | head -2 || echo 'unknown')"
+
+    # USB dongle
+    echo -n "USB dongle:   "
+    if lsusb 2>/dev/null | grep -qi '1ff7:0f52'; then
+        echo "detected (1ff7:0f52)"
+        HIDRAW=$(ls /dev/hidraw* 2>/dev/null) || true
+        [[ -n "${HIDRAW:-}" ]] && echo "  hidraw:     $(echo "$HIDRAW" | tr '\n' ' ')"
+    else
+        echo "not detected"
+    fi
+
+    # Disk space
+    echo "Disk free:    $(df -h "$INSTALL_DIR" 2>/dev/null | awk 'NR==2{print $4}' || echo 'unknown')"
+
+    # notify-send
+    echo "notify-send:  $($HAS_NOTIFY && echo 'available' || echo 'not found')"
+
+    # Recent log
+    echo
+    echo "=== Last 15 log lines ==="
+    if [[ -f "$LOG_FILE" ]]; then
+        tail -n 15 "$LOG_FILE"
+    else
+        echo "(no log file yet)"
+    fi
+
+    exit 0
+fi
+
+# ── Instance lock (prevent duplicate launches) ────────────────
+LOCK_FILE="$INSTALL_DIR/.maxhub.lock"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    log "MAXHUB is already running (lock held)."
+    notify "MAXHUB is already running" "Another instance is active." "normal"
+    exit 0
+fi
+
 log "=== MAXHUB Dongle Launcher ==="
 log "Instance lock acquired"
 log "Wine: $("$WINE" --version 2>/dev/null || echo 'not found')"
@@ -339,12 +437,14 @@ log "GPU: $(lspci 2>/dev/null | grep -i 'vga\|3d\|display' | head -2 || echo 'un
 if [[ ! -f "$EXE" ]]; then
     log "ERROR: $EXE not found."
     log "Copy MAXHUB.exe to $INSTALL_DIR/ first."
+    notify "MAXHUB failed to start" "MAXHUB.exe not found at $INSTALL_DIR/" "critical"
     exit 1
 fi
 
 if [[ ! -x "$WINE" ]]; then
     log "ERROR: Wine not found at $WINE"
     log "Re-run the installer: sudo bash maxhub-linux-install.sh"
+    notify "MAXHUB failed to start" "Wine not found. Re-run the installer." "critical"
     exit 1
 fi
 
@@ -352,12 +452,14 @@ if [[ -z "${DISPLAY:-}" ]]; then
     log "ERROR: No display found (\$DISPLAY is empty)."
     log "This tool requires X11. Wayland without XWayland is not supported."
     log "If you use Wayland, make sure XWayland is enabled."
+    notify "MAXHUB failed to start" "No display found. X11/XWayland required." "critical"
     exit 1
 fi
 
 # First launch: create prefix + pre-create directories the app expects
 if [[ ! -d "$WINEPREFIX/drive_c" ]]; then
     log "First launch — setting up Wine (~10 seconds) …"
+    notify "Wine is initializing…" "First launch setup (~10 seconds)" "normal"
     mkdir -p "$WINEPREFIX"
     # Initialize Wine prefix (creates drive_c, system32, etc.)
     "$WINE" wineboot --init 2>&1 | grep -v '^libEGL warning' | tee -a "$LOG_FILE"
@@ -382,11 +484,29 @@ fi
 
 log "Starting: $WINE $EXE $*"
 log "Log file: $LOG_FILE"
+notify "MAXHUB is loading…" "Starting the dongle application" "low"
 
 cd "$INSTALL_DIR"
 "$WINE" "$EXE" "$@" 2>&1 | grep -v '^libEGL warning' | tee -a "$LOG_FILE"
 EXIT_CODE=${PIPESTATUS[0]}
 log "Wine exited with code: $EXIT_CODE"
+
+if [[ "$EXIT_CODE" -ne 0 ]]; then
+    notify "MAXHUB has stopped" "Wine exited with error code $EXIT_CODE" "critical"
+    read -r -d '' TROUBLESHOOT <<'TROUBLESHOOT_END' || true
+=== MAXHUB exited with an error ===
+
+Troubleshooting steps:
+  1. Unplug and re-plug the USB dongle
+  2. Run diagnostics:   maxhub-dongle.sh --status
+  3. Clean Wine start:  rm -rf /opt/maxhub-dongle/.wineprefix
+  4. Re-run installer:  sudo bash maxhub-linux-install.sh
+  5. Check full log:    /opt/maxhub-dongle/logs/maxhub.log
+TROUBLESHOOT_END
+    log "$TROUBLESHOOT"
+    echo "$TROUBLESHOOT"
+fi
+
 exit "$EXIT_CODE"
 LAUNCHER_SCRIPT
 chmod +x "$LAUNCHER"
@@ -399,7 +519,8 @@ Name=MAXHUB Dongle
 Comment=MAXHUB Wireless Screen Sharing Dongle
 Exec=/opt/maxhub-dongle/maxhub-dongle.sh
 Icon=video-display
-Terminal=true
+Terminal=false
+StartupNotify=true
 Categories=Utility;Network;
 Keywords=maxhub;dongle;screen;sharing;wireless;
 DESKTOP
