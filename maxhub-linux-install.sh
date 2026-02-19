@@ -311,6 +311,14 @@ export WINEPREFIX="$INSTALL_DIR/.wineprefix"
 export WINEDLLOVERRIDES="mscoree=d;mshtml=d"
 export WINEDEBUG=-all
 
+# ── Instance lock (prevent duplicate launches) ────────────────
+LOCK_FILE="$INSTALL_DIR/.maxhub.lock"
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+    echo "MAXHUB is already running."
+    exit 0
+fi
+
 # ── Logging ────────────────────────────────────────────────────
 LOG_DIR="$INSTALL_DIR/logs"
 mkdir -p "$LOG_DIR"
@@ -322,6 +330,7 @@ LOG_FILE="$LOG_DIR/maxhub.log"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 
 log "=== MAXHUB Dongle Launcher ==="
+log "Instance lock acquired"
 log "Wine: $("$WINE" --version 2>/dev/null || echo 'not found')"
 log "WINEPREFIX: $WINEPREFIX"
 log "DISPLAY: ${DISPLAY:-unset}"
